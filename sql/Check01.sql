@@ -1,5 +1,3 @@
-SELECT * FROM fred_series;
-SELECT series_id, COUNT(*) AS n
+SELECT series_id, MIN(date) AS start_date
 FROM fred_observations
-GROUP BY series_id
-ORDER BY n DESC;
+GROUP BY series_id;
