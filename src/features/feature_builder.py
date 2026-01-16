@@ -16,7 +16,7 @@ def rolling_features(df, time_frame = (3,6)):
     for columns in columnsTo_target:
         for t in time_frame:
             df[f"{columns}_rolling_average_{t}_months"] = (
-    df[columns].rolling(window=t, min_periods=t).mean().shift(1)
+    df[columns].shift(1).rolling(window=t, min_periods=t).mean()
 )
     return df
 
