@@ -20,47 +20,6 @@ This project constructs a labor market forecasting pipeline that models and visu
 5. Visualize results in Tableau with a polished dashboard
 
 ---
-
-## 🧱 Project Structure
-
-JobMarket_ForecastProject/
-├── assets/
-│ └── Dashboard 1.png
-├── sql/
-│ ├── Create_fred_tables.sql
-│ ├── createAnnualTable.sql
-│ ├── create_plot_annual_wages.sql
-│ ├── TableForModel.sql
-│ └── tables.sql
-├── src/
-│ ├── db/
-│ │ ├── connect.py
-│ │ └── jobmarket.db
-│ ├── etl/
-│ │ ├── fred_extraction.py
-│ │ └── pullingData.py
-| | └── Loading_modelData.py
-│ ├── features/
-│ │ └── feature_builder.py
-│ ├── models/
-│ │ ├── baseline_fred.py
-│ │ ├── linear_fred.py
-│ │ ├── forecast_linear_fred.py
-│ │ ├── xgboost_unemployment.py
-│ │ └── annual_wages_forecast.py
-│ └── plots/
-│ └── unemployment_plot_forecast.py
-| └── hourlyplotForecast.py
-├── tableau/
-│ ├── data/
-│ │ ├── plot_unemployment.csv
-│ │ └── plot_annual_wages.csv
-│ └── workbooks/
-│ └── labor_market_forecasting.twbx
-├── requirements.txt
-├── .env
-└── README.md
-
 ## Data Pipeline Overview
 ### Data Sources
 - FRED (Federal Reserve Economic Data) for unemployment and wage indicators
@@ -72,3 +31,71 @@ JobMarket_ForecastProject/
 ### ETL
 - Data extraction and loading handled in `src/etl/`
 - SQL scripts materialize clean tables for modeling and visualization
+
+## Dashboard Insights & Findings
+
+### Unemployment
+
+The **Actual vs Forecasted Unemployment** panel highlights two major structural shocks in the labor market:
+
+- **Great Recession (2008–2010)**  
+  Unemployment rises sharply to around 10%, followed by a long, gradual recovery.
+
+- **COVID-19 Shock (2020)**  
+  A sudden spike to nearly **11%**, followed by a very fast recovery.
+
+These events directly impact model behavior and forecast reliability.
+
+---
+
+### Forecast Model Behavior: Linear vs XGBoost
+
+#### Linear Regression Forecast
+- Predicts a **steady decline** in unemployment over the next five years   
+- Produces a more **optimistic outlook**  
+- Highly sensitive to recent downward momentum  
+
+
+---
+
+#### XGBoost Forecast
+- Produces a **flatter, more conservative** unemployment path    
+- Better captures **nonlinear behavior and regime changes**
+
+**Interpretation:**  
+XGBoost implicitly assumes that post-shock normalization leads to stabilization rather than continuous improvement.
+
+---
+
+### Forecast Comparison Panel: Model Divergence
+
+The **Forecast Comparison** chart makes model differences explicit:
+
+- The **gap between Linear and XGBoost widens over time**
+- XGBoost stabilizes unemployment closer to current levels
+
+> Different models answer different “what-if” questions about the future.
+
+---
+
+### Annual Wages: Persistent Long-Run Growth
+
+The **Average Wages** panel shows:
+
+- A consistent upward trend from ~2006 onward  
+- Temporary slowdowns but **no structural wage collapse**, even during COVID  
+- Accelerated wage growth post-2020  
+
+This indicates that wages are more resilient than unemployment during downturns.
+
+---
+
+### 5️⃣ Annual Wage Forecast: Structural Implication
+
+The 5-year annual wage forecast (Linear Regression) suggests:
+
+- Continued wage growth despite:
+  - Stabilizing unemployment
+  - Reduced labor market slack
+
+
