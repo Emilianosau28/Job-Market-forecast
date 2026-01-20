@@ -33,7 +33,7 @@ This project constructs a labor market forecasting pipeline that models and visu
 - SQL scripts materialize clean tables for modeling and visualization
 
 ## Dashboard Insights & Findings
-![Labor Market Forecasting Dashboard](assets/labor_market_dashboard.png)
+![Labor Market Forecasting Dashboard](assets/Dashboard1.png)
 
 ### Unemployment
 
