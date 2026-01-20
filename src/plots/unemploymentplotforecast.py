@@ -15,7 +15,12 @@ if __name__ == "__main__":
         "SELECT * FROM forecast_unemployment_rate_monthly",
         engine
     )
+
+    forecast2 = pd.read_sql("SELECT * FROM forecast_unemployment_rate_xgb",engine)
+
     forecast["month"] = pd.to_datetime(forecast["month"])
+    forecast2["month"] = pd.to_datetime(forecast["month"])
+    
 
     plt.figure(figsize=(12, 6))
 
@@ -30,10 +35,19 @@ if __name__ == "__main__":
     plt.plot(
         forecast["month"],
         forecast["unemployment_rate"],
-        label="Forecast",
+        label="Forecast linear regression",
         linestyle="--",
         linewidth=2
     )
+    plt.plot(
+        forecast2["month"],
+        forecast2["unemployment_rate"],
+        label="Forecast xgboost",
+        linestyle="--",
+        linewidth=2,
+        color = "purple"
+    )
+
 
     plt.xlabel("Year")
     plt.ylabel("Unemployment rate")

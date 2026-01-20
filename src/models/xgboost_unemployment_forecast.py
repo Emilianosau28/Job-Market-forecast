@@ -1,113 +1,116 @@
 import pandas as pd
-import numpy as np
 from xgboost import XGBRegressor
+import numpy as np
 
 from src.etl.Loading_modelData import load_model_data
 from src.features.feature_builder import build_features
 from src.db.connect import get_engine
 
-TARGET = "unemployment_rate"
-HORIZON = 60  # months
+target = "unemployment_rate"
+horizon = 60
 
 
-def make_feature_list(df_feat: pd.DataFrame) -> list:
-    feats = []
-    for c in df_feat.columns:
-        if c.startswith(f"{TARGET}_lag_") or c.startswith(f"{TARGET}_rolling_average_"):
-            feats.append(c)
-    feats.append("t")
-    return feats
+def get_featureCols(df, target: str):
+    df = pd.DataFrame(df)
+    features = []
+    for i in df.columns:
+        if i.startswith(f"{target}_lag_") or i.startswith(f"{target}_rolling_average_"):
+            features.append(i)
+
+    features.append("t")
+    return features
 
 
 if __name__ == "__main__":
-    # 1) Load data
     df = load_model_data()
-    df["month"] = pd.to_datetime(df["month"].astype(str))
+
+    df["month"] = pd.to_datetime(df["month"].astype(str), errors="coerce")
+    df = df.dropna(subset=["month"]).copy()
+
+
+    df["month"] = df["month"].values.astype("datetime64[M]")
+    df["month"] = pd.to_datetime(df["month"])
+
+
+    df = df.sort_values("month").set_index("month").asfreq("MS")
+
+    
+    df[target] = pd.to_numeric(df[target], errors="coerce")
+    df[target] = df[target].interpolate(method="time").ffill().bfill()
+
+
+    df = df.reset_index()
     df = df.sort_values("month").reset_index(drop=True)
 
-    # 2) IMPORTANT: remove any rows where TARGET is missing
-    # This prevents rolling windows from becoming NaN at the end of history
-    df = df[df[TARGET].notna()].copy()
-    df = df.sort_values("month").reset_index(drop=True)
-
-    # 3) Add time index
     df["t"] = range(len(df))
 
-    # 4) Build features
+
     df_feat = build_features(df)
+    featureCols = get_featureCols(df_feat, target)
 
-    features = make_feature_list(df_feat)
 
-    # 5) Train data (must have all features + target)
-    train = df_feat.dropna(subset=features + [TARGET]).copy()
-    X_train = train[features]
-    y_train = train[TARGET]
+    df_feat["target_next"] = pd.to_numeric(df_feat[target], errors="coerce").shift(-1)
+    df_feat["delta_target"] = df_feat["target_next"] - pd.to_numeric(df_feat[target], errors="coerce")
 
-    model = XGBRegressor(
-        n_estimators=400,
-        max_depth=4,
-        learning_rate=0.01,
-        subsample=1.0,
-        colsample_bytree=1.0,
-        random_state=42,
+    train = df_feat.dropna(subset=featureCols + [target, "delta_target"]).copy()
+
+    xtrain = (
+        train[featureCols]
+        .apply(pd.to_numeric, errors="coerce")
+        .astype(float)
     )
-    model.fit(X_train, y_train)
+    ytrain = pd.to_numeric(train["delta_target"], errors="coerce").astype(float)
 
-    # 6) Recursive forecast loop
-    df_roll = df.copy()
+    mask = xtrain.notna().all(axis=1) & ytrain.notna()
+    xtrain = xtrain.loc[mask]
+    ytrain = ytrain.loc[mask]
+
+    model = XGBRegressor(n_estimators=400, max_depth=4, learning_rate=0.01)
+    model.fit(xtrain, ytrain)
+
+    dfroll = df.copy()
     forecasts = []
 
-    for step in range(HORIZON):
-        next_month = df_roll["month"].max() + pd.offsets.MonthBegin(1)
+    for j in range(horizon):
+        df_roll_feat = build_features(dfroll)
+        X_curr = df_roll_feat.loc[df_roll_feat.index[-1], featureCols].to_frame().T
+        X_curr = X_curr.apply(pd.to_numeric, errors="coerce").astype(float)
 
-        # append a new empty row for next month
-        new_row = {col: np.nan for col in df_roll.columns}
-        new_row["month"] = next_month
-        new_row["t"] = int(df_roll["t"].max()) + 1
-
-        df_roll = pd.concat([df_roll, pd.DataFrame([new_row])], ignore_index=True)
-
-        # rebuild features using df_roll
-        df_roll_feat = build_features(df_roll)
-        last_row = df_roll_feat.iloc[-1]
-        X_next = last_row[features].to_frame().T
-
-        # if we still can't compute features, stop
-        if X_next.isna().any().any():
-            missing = X_next.columns[X_next.isna().iloc[0]].tolist()
-            print("NaNs found in nextX (cannot predict). Missing:", missing)
+        if X_curr.isna().any().any():
+            missing = X_curr.columns[X_curr.isna().iloc[0]].tolist()
+            print("Null values found in X_curr (cannot forecast). Missing:", missing)
             break
 
-        pred = float(model.predict(X_next)[0])
+        curr_level = float(dfroll.loc[dfroll.index[-1], target])
+        pred_delta = float(model.predict(X_curr)[0])
+        next_level = curr_level + pred_delta
 
-        # write prediction back into the rolling dataframe
-        df_roll.loc[df_roll.index[-1], TARGET] = pred
+        next_month = dfroll["month"].max() + pd.offsets.MonthBegin(1)
+        next_t = int(dfroll["t"].max()) + 1
 
-        forecasts.append({"month": next_month, TARGET: pred})
+        new_row = {c: np.nan for c in dfroll.columns}
+        new_row.update({"month": next_month, "t": next_t, target: next_level})
+        dfroll = pd.concat([dfroll, pd.DataFrame([new_row])], ignore_index=True)
+
+        forecasts.append({"month": next_month, target: next_level})
 
     forecast_df = pd.DataFrame(forecasts)
 
     print("\nForecast preview:")
     print(forecast_df.head())
-
     print("\nForecast tail:")
     print(forecast_df.tail())
 
-    print("\nRows:", len(forecast_df))
-
-    # 7) Save only if we actually forecasted something
     if forecast_df.empty:
-        print("\nNo forecasts generated -> not saving to SQLite.")
-        raise SystemExit(0)
-
-    engine = get_engine()
-    forecast_df.to_sql(
-        "forecast_unemployment_rate_xgb",
-        engine,
-        if_exists="replace",
-        index=False
-    )
-    print("\nSaved to SQLite table: forecast_unemployment_rate_xgb")
-
+        print("not saving to SQLite.")
+    else:
+        engine = get_engine()
+        forecast_df.to_sql(
+            "forecast_unemployment_rate_xgb",
+            engine,
+            if_exists="replace",
+            index=False
+        )
+        print("success sql save")
 
 

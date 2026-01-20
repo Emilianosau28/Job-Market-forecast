@@ -14,3 +14,7 @@ CREATE TABLE IF NOT EXISTS fred_observations (
   PRIMARY KEY (series_id, date),
   FOREIGN KEY(series_id) REFERENCES fred_series(series_id)
 );
+
+
+
+
