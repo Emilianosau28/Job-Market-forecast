@@ -90,7 +90,7 @@ This indicates that wages are more resilient than unemployment during downturns.
 
 ---
 
-### 5️⃣ Annual Wage Forecast: Structural Implication
+###  Annual Wage Forecast: Structural Implication
 
 The 5-year annual wage forecast (Linear Regression) suggests:
 
